@@ -6,6 +6,8 @@ npm-debug.log*
 # Build artifacts
 dist/
 build/
+.next/
+apps/web/.next/
 .expo/
 .expo-shared/
 web-build/

@@ -125,7 +125,7 @@
       </div>
       <div class="grid grid-3">
         <div class="tile" onclick="go('discover')"><div class="ico">🧭</div><div class="ttl">发现目的地</div><div class="muted">5 步 Wizard，看 5–7 个候选</div></div>
-        <div class="tile" onclick="go('expenses')"><div class="ico">💰</div><div class="ttl">团队记账</div><div class="muted">12 笔账 · ¥8,420 · 看谁该转给谁</div></div>
+        <div class="tile" onclick="go('expenses')"><div class="ico">💰</div><div class="ttl">团队记账</div><div class="muted">12 笔账 · 多币种 · 按结算日汇率</div></div>
         <div class="tile" onclick="go('album')"><div class="ico">📸</div><div class="ttl">共享相册</div><div class="muted">23 张照片 · 按拍摄日分组</div></div>
       </div>
       <div class="divider"></div>
@@ -154,7 +154,7 @@
         <button class="btn btn-outline" id="add-expense-btn">+ 加一笔</button>
       </div>
       <table id="expenses-table">
-        <thead><tr><th>日期</th><th>项目</th><th>谁付的</th><th style="text-align:right">金额</th><th>分账方式</th></tr></thead>
+        <thead><tr><th>日期</th><th>项目</th><th>谁付的</th><th style="text-align:right">原币种金额</th><th style="text-align:right">结算折算</th><th>分账方式</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="divider"></div>
@@ -208,20 +208,27 @@ const memberMap = Object.fromEntries(TRIP.members.map(m=>[m.id,m]));
 const allIds = TRIP.members.map(m=>m.id);
 
 let EXPENSES = [
-  // amount in CENTS to mirror real impl
-  {id:'e1', date:'04-02', title:'机票（成田—关西）',     payer:'u1', cents:285000, mode:'equal',    participants:allIds},
-  {id:'e2', date:'04-02', title:'机场—京都 JR 票',       payer:'u3', cents:9800,   mode:'equal',    participants:allIds},
-  {id:'e3', date:'04-03', title:'民宿（4 晚）',           payer:'u2', cents:240000, mode:'weighted', weights:{u1:1,u2:2,u3:1,u4:1,u5:1}},
-  {id:'e4', date:'04-03', title:'清水寺夜樱拉面',         payer:'u4', cents:6800,   mode:'equal',    participants:allIds},
-  {id:'e5', date:'04-04', title:'岚山小火车票',           payer:'u5', cents:14500,  mode:'equal',    participants:allIds},
-  {id:'e6', date:'04-04', title:'河边便利店买啤酒',       payer:'u1', cents:3200,   mode:'equal',    participants:['u1','u2','u4','u5']},
-  {id:'e7', date:'04-05', title:'伏见稻荷往返',           payer:'u3', cents:4600,   mode:'equal',    participants:allIds},
-  {id:'e8', date:'04-05', title:'抹茶冰淇淋（Lily 请客）', payer:'u3', cents:2500,   mode:'equal',    participants:['u1','u2','u4','u5']},
-  {id:'e9', date:'04-06', title:'怀石料理',               payer:'u2', cents:96000,  mode:'equal',    participants:allIds},
-  {id:'e10',date:'04-07', title:'奈良鹿饼 + 巴士',         payer:'u4', cents:5800,   mode:'equal',    participants:allIds},
-  {id:'e11',date:'04-08', title:'手信 (Jay 帮买的)',       payer:'u4', cents:18000,  mode:'weighted', weights:{u1:1,u2:1,u3:2,u4:1,u5:1}},
-  {id:'e12',date:'04-09', title:'回程机场快线',           payer:'u5', cents:9800,   mode:'equal',    participants:allIds},
+  // amount in minor units * 100 to mirror the real impl
+  {id:'e1', date:'04-02', title:'上海—关西往返机票',       payer:'u1', cents:285000, currency:'CNY', mode:'equal',    participants:allIds},
+  {id:'e2', date:'04-02', title:'机场—京都 JR 票',         payer:'u3', cents:980000, currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e3', date:'04-03', title:'民宿（4 晚）',             payer:'u2', cents:240000, currency:'CNY', mode:'weighted', weights:{u1:1,u2:2,u3:1,u4:1,u5:1}},
+  {id:'e4', date:'04-03', title:'清水寺夜樱拉面',           payer:'u4', cents:680000, currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e5', date:'04-04', title:'岚山小火车票',             payer:'u5', cents:1450000,currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e6', date:'04-04', title:'河边便利店买啤酒',         payer:'u1', cents:320000, currency:'JPY', mode:'equal',    participants:['u1','u2','u4','u5']},
+  {id:'e7', date:'04-05', title:'伏见稻荷往返',             payer:'u3', cents:460000, currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e8', date:'04-05', title:'抹茶冰淇淋（Lily 请客）',   payer:'u3', cents:250000, currency:'JPY', mode:'equal',    participants:['u1','u2','u4','u5']},
+  {id:'e9', date:'04-06', title:'怀石料理',                 payer:'u2', cents:9600000,currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e10',date:'04-07', title:'奈良鹿饼 + 巴士',           payer:'u4', cents:580000, currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e11',date:'04-08', title:'海外预订手续费',             payer:'u4', cents:1880,   currency:'USD', mode:'weighted', weights:{u1:1,u2:1,u3:2,u4:1,u5:1}},
+  {id:'e12',date:'04-09', title:'回程机场快线',              payer:'u5', cents:980000, currency:'JPY', mode:'equal',    participants:allIds},
 ];
+
+const SETTLEMENT_CURRENCY = 'CNY';
+const FX = {
+  date: '2026-06-15',
+  source: 'demo 固定汇率',
+  rates: { CNY:1, JPY:0.04221, USD:7.18 },
+};
 
 const PHOTOS = [
   {id:'p1', date:'04-03', emoji:'🌸', likes:4},
@@ -276,12 +283,31 @@ function splitExpense(mode, cents, expense){
 }
 
 // 净额：每个人「该付」-「实付」
+function convertedCents(e){
+  const rate = FX.rates[e.currency] || 1;
+  return Math.round(e.cents * rate);
+}
+function convertedShares(e, convertedTotal){
+  const rate = FX.rates[e.currency] || 1;
+  const shares = splitExpense(e.mode, e.cents, e);
+  const out = shares.map((s,i)=>{
+    const exact = s.cents * rate;
+    return {user_id:s.user_id, cents:Math.floor(exact), frac:exact-Math.floor(exact), i};
+  });
+  let rem = convertedTotal - out.reduce((sum,s)=>sum+s.cents,0);
+  [...out].sort((a,b)=>b.frac-a.frac || a.i-b.i).forEach(s=>{
+    if(rem > 0){ s.cents += 1; rem -= 1; }
+  });
+  return out;
+}
+
 function settleNet(expenses){
   const balance = {};
   for(const e of expenses){
-    const shares = splitExpense(e.mode, e.cents, e);
+    const total = convertedCents(e);
+    const shares = convertedShares(e, total);
     // 谁付的：余额 += 全额；分到的人：余额 -= 自己那份
-    balance[e.payer] = (balance[e.payer]||0) + e.cents;
+    balance[e.payer] = (balance[e.payer]||0) + total;
     for(const s of shares){
       balance[s.user_id] = (balance[s.user_id]||0) - s.cents;
     }
@@ -309,7 +335,10 @@ function minimumTransfers(balance){
   }
   return out;
 }
-function formatCents(c){ return '¥' + (c/100).toFixed(2); }
+function formatCents(c, currency='CNY'){
+  const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '¥';
+  return symbol + (c/100).toFixed(2);
+}
 
 /* ============ RENDER ============ */
 function avatar(m){
@@ -441,7 +470,8 @@ function renderExpenses(){
       <td class="muted mono">${e.date}</td>
       <td><strong>${e.title}</strong></td>
       <td><span class="avatar" style="background:${memberMap[e.payer].color};margin-right:6px">${memberMap[e.payer].name[0]}</span>${memberMap[e.payer].name}</td>
-      <td style="text-align:right"><strong>${formatCents(e.cents)}</strong></td>
+      <td style="text-align:right"><strong>${formatCents(e.cents, e.currency)}</strong> <span class="muted">${e.currency}</span></td>
+      <td style="text-align:right">${formatCents(convertedCents(e), SETTLEMENT_CURRENCY)}</td>
       <td><span class="pill ${e.mode==='weighted'?'warn':'brand'}">${e.mode==='weighted'?'加权':'等额'}</span></td>
     </tr>
   `).join('');
@@ -450,7 +480,8 @@ function renderExpenses(){
   const balance = settleNet(EXPENSES);
   const transfers = minimumTransfers(balance);
 
-  let html = `<div class="grid grid-2"><div>`;
+  let html = `<div class="muted" style="margin-bottom:12px">按最终 AA 日 ${FX.date} 汇率统一折算为 ${SETTLEMENT_CURRENCY}：1 JPY = ${FX.rates.JPY} CNY · 1 USD = ${FX.rates.USD} CNY（${FX.source}）</div>`;
+  html += `<div class="grid grid-2"><div>`;
   html += `<div class="label-sm">每人净额</div>`;
   html += TRIP.members.map(m=>{
     const v = balance[m.id] || 0;
@@ -487,7 +518,7 @@ document.addEventListener('click', e=>{
   if(yuan <= 0) return;
   EXPENSES.push({
     id:'e'+Date.now(), date:new Date().toISOString().slice(5,10),
-    title, payer:'u1', cents:Math.round(yuan*100), mode:'equal', participants:allIds,
+    title, payer:'u1', cents:Math.round(yuan*100), currency:'CNY', mode:'equal', participants:allIds,
   });
   renderExpenses();
 });

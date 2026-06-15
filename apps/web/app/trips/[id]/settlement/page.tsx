@@ -2,7 +2,8 @@
 // via RLS, run settleNet + minimumTransfers from @tripmate/shared, render.
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
-import { formatCents, settleNet, minimumTransfers, type ExpenseWithShares } from '@tripmate/shared';
+import { getSettlementRates } from '@/lib/fx';
+import { formatCents, settleNetInCurrency, minimumTransfers, type ExpenseWithShares } from '@tripmate/shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,18 +34,33 @@ export default async function SettlementPage({ params }: { params: { id: string 
     id: e.id,
     payer_id: e.payer_id,
     amount_cents: e.amount_cents,
+    currency: e.currency,
     shares: (e.expense_shares ?? []).map((s: any) => ({
       user_id: s.user_id, share_cents: s.share_cents,
     })),
   })) as ExpenseWithShares[];
 
-  const balances = settleNet(expenses);
+  const fx = await getSettlementRates(
+    expenses.map((e) => e.currency),
+    currency,
+  );
+  const balances = settleNetInCurrency(expenses, {
+    settlement_currency: fx.settlement_currency,
+    rates: fx.rates,
+  });
   const transfers = minimumTransfers(balances);
 
   return (
     <div className="space-y-5">
       <Link href={`/trips/${params.id}/expenses`} className="text-muted text-sm">← 团队记账</Link>
       <h1 className="text-2xl font-bold">净额结算</h1>
+      <div className="card p-3 text-sm text-muted">
+        按结算日 {fx.date} 汇率折算为 {fx.settlement_currency}
+        {fx.source === 'fallback' ? '（部分汇率使用兜底值）' : ''}
+        {Object.entries(fx.rates)
+          .filter(([code]) => code !== fx.settlement_currency)
+          .map(([code, rate]) => ` · 1 ${code} = ${rate.toFixed(4)} ${fx.settlement_currency}`)}
+      </div>
 
       <div>
         <div className="label-sm">当前净额</div>

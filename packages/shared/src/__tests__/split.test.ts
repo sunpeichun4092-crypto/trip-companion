@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitEqual, splitWeighted } from '../split';
+import { splitEqual, splitWeighted } from '../split.ts';
 
 const u = (i: number) => `00000000-0000-0000-0000-${i.toString().padStart(12, '0')}`;
 

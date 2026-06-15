@@ -17,6 +17,7 @@ export default function SettlementScreen() {
   const [transfers, setTransfers] = useState<SettlementTransfer[]>([]);
   const [names, setNames] = useState<ProfileMap>({});
   const [currency, setCurrency] = useState('CNY');
+  const [fxNote, setFxNote] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -28,11 +29,19 @@ export default function SettlementScreen() {
       setNames(m);
       setCurrency(trip.currency);
 
-      const r = await api.get<{ balances: UserBalance[]; transfers: SettlementTransfer[] }>(
+      const r = await api.get<{
+        balances: UserBalance[];
+        transfers: SettlementTransfer[];
+        fx?: { settlement_currency: string; date: string; source: string; rates: Record<string, number> };
+      }>(
         `/trips/${tripId}/settlement`,
       );
       setBalances(r.balances);
       setTransfers(r.transfers);
+      if (r.fx) {
+        setCurrency(r.fx.settlement_currency);
+        setFxNote(`按 ${r.fx.date} 汇率折算为 ${r.fx.settlement_currency}`);
+      }
     } catch (e: any) {
       Alert.alert('加载失败', e.message);
     }
@@ -43,6 +52,7 @@ export default function SettlementScreen() {
   return (
     <View style={s.wrap}>
       <Text style={s.section}>当前净额</Text>
+      {!!fxNote && <Text style={s.fx}>{fxNote}</Text>}
       <FlatList
         data={balances}
         keyExtractor={(b) => b.user_id}
@@ -81,6 +91,7 @@ export default function SettlementScreen() {
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: colors.bg, paddingTop: spacing.l },
   section: { fontSize: 13, color: colors.muted, marginHorizontal: spacing.l, marginVertical: spacing.s, textTransform: 'uppercase', letterSpacing: 1 },
+  fx: { color: colors.muted, marginHorizontal: spacing.l, marginBottom: spacing.s, fontSize: 12 },
   balRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.card, padding: spacing.m, borderRadius: radius.md },
   txRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, padding: spacing.m, borderRadius: radius.md, marginHorizontal: spacing.l, marginBottom: spacing.s, gap: spacing.s },
   name: { fontSize: 14, fontWeight: '500', color: colors.text },

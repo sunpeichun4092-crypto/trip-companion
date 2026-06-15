@@ -115,7 +115,12 @@ photosRouter.get('/:tripId/photos', async (req, res) => {
       .storage.from('trip-photos')
       .createSignedUrls(paths, 60 * 60);
     if (sErr) throw new HttpError(500, sErr.message);
-    urlMap = new Map(signed.map((s) => [s.path!, s.signedUrl]));
+    urlMap = new Map();
+    for (const s of signed) {
+      if (s.path && s.signedUrl) {
+        urlMap.set(s.path, s.signedUrl);
+      }
+    }
   }
 
   // like counts

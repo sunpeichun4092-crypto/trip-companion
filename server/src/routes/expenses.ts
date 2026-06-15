@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import {
-  splitExpense, settleNet, minimumTransfers,
+  splitExpense, settleNetInCurrency, minimumTransfers,
   type ExpenseWithShares,
 } from '@tripmate/shared';
+import { getSettlementRates } from '../lib/fx.js';
 
 export const expensesRouter = Router();
 expensesRouter.use(requireAuth);
@@ -114,18 +115,35 @@ expensesRouter.delete('/:tripId/expenses/:id', async (req, res) => {
 // =========================================================================
 expensesRouter.get('/:tripId/settlement', async (req, res) => {
   const tripId = req.params.tripId;
-  const { data: rows, error } = await req.db!
-    .from('expenses')
-    .select(`
-      id, trip_id, payer_id, amount_cents, currency, description, category,
-      spent_at, split_mode, created_by, created_at,
-      shares:expense_shares(expense_id, user_id, share_cents)
-    `)
-    .eq('trip_id', tripId);
-  if (error) throw new HttpError(400, error.message);
+  const [tripQ, expQ] = await Promise.all([
+    req.db!
+      .from('trips')
+      .select('id, currency')
+      .eq('id', tripId)
+      .maybeSingle(),
+    req.db!
+      .from('expenses')
+      .select(`
+        id, trip_id, payer_id, amount_cents, currency, description, category,
+        spent_at, split_mode, created_by, created_at,
+        shares:expense_shares(expense_id, user_id, share_cents)
+      `)
+      .eq('trip_id', tripId),
+  ]);
+  if (tripQ.error) throw new HttpError(400, tripQ.error.message);
+  if (expQ.error) throw new HttpError(400, expQ.error.message);
+  if (!tripQ.data) throw new HttpError(404, 'trip not found');
 
-  const expenses = (rows ?? []) as unknown as ExpenseWithShares[];
-  const balances = settleNet(expenses);
+  const expenses = (expQ.data ?? []) as unknown as ExpenseWithShares[];
+  const settlementCurrency = String((tripQ.data as { currency?: string }).currency ?? 'CNY');
+  const fx = await getSettlementRates(
+    expenses.map((e) => e.currency),
+    settlementCurrency,
+  );
+  const balances = settleNetInCurrency(expenses, {
+    settlement_currency: fx.settlement_currency,
+    rates: fx.rates,
+  });
   const transfers = minimumTransfers(balances);
-  res.json({ balances, transfers });
+  res.json({ balances, transfers, fx });
 });

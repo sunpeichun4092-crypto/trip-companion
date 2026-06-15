@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { settleNet, minimumTransfers } from '../settle';
-import type { ExpenseWithShares } from '../types';
+import { settleNet, settleNetInCurrency, minimumTransfers } from '../settle.ts';
+import type { ExpenseWithShares } from '../types.ts';
 
 const u = (i: number) => `00000000-0000-0000-0000-${i.toString().padStart(12, '0')}`;
 
@@ -100,4 +100,64 @@ test('minimumTransfers: balanced ledger produces zero transfers', () => {
     { user_id: u(1), balance_cents: 0 },
     { user_id: u(2), balance_cents: 0 },
   ]), []);
+});
+
+test('settleNetInCurrency: converts mixed-currency expenses at settlement rates', () => {
+  const balances = settleNetInCurrency([
+    exp({
+      id: u(201),
+      payer_id: u(1),
+      amount_cents: 10000,
+      currency: 'CNY',
+      shares: [
+        { expense_id: u(201), user_id: u(1), share_cents: 5000 },
+        { expense_id: u(201), user_id: u(2), share_cents: 5000 },
+      ],
+    }),
+    exp({
+      id: u(202),
+      payer_id: u(2),
+      amount_cents: 100000,
+      currency: 'JPY',
+      shares: [
+        { expense_id: u(202), user_id: u(1), share_cents: 50000 },
+        { expense_id: u(202), user_id: u(2), share_cents: 50000 },
+      ],
+    }),
+  ], {
+    settlement_currency: 'CNY',
+    rates: { JPY: 0.05 },
+  });
+
+  const m = new Map(balances.map((b) => [b.user_id, b.balance_cents]));
+  assert.equal(m.get(u(1)), 2500);
+  assert.equal(m.get(u(2)), -2500);
+
+  assert.deepEqual(minimumTransfers(balances), [
+    { from: u(2), to: u(1), amount_cents: 2500 },
+  ]);
+});
+
+test('settleNetInCurrency: preserves converted total when FX rounding has remainders', () => {
+  const balances = settleNetInCurrency([
+    exp({
+      id: u(301),
+      payer_id: u(1),
+      amount_cents: 101,
+      currency: 'USD',
+      shares: [
+        { expense_id: u(301), user_id: u(1), share_cents: 34 },
+        { expense_id: u(301), user_id: u(2), share_cents: 34 },
+        { expense_id: u(301), user_id: u(3), share_cents: 33 },
+      ],
+    }),
+  ], {
+    settlement_currency: 'CNY',
+    rates: { USD: 7.1234 },
+  });
+
+  assert.equal(
+    balances.reduce((sum, b) => sum + b.balance_cents, 0),
+    0,
+  );
 });

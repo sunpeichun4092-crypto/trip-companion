@@ -22,6 +22,13 @@ export interface UserBalance {
   balance_cents: number;   // > 0 = others owe me; < 0 = I owe
 }
 
+export type FxRates = Record<string, number>; // 1 unit of currency -> settlement currency
+
+export interface SettlementCurrencyOptions {
+  settlement_currency: string;
+  rates: FxRates;
+}
+
 export function settleNet(expenses: ExpenseWithShares[]): UserBalance[] {
   const map = new Map<UUID, number>();
   const bump = (uid: UUID, delta: number) => {
@@ -41,6 +48,47 @@ export function settleNet(expenses: ExpenseWithShares[]): UserBalance[] {
       );
     }
   }
+  return Array.from(map.entries()).map(([user_id, balance_cents]) => ({
+    user_id,
+    balance_cents,
+  }));
+}
+
+export function settleNetInCurrency(
+  expenses: ExpenseWithShares[],
+  options: SettlementCurrencyOptions,
+): UserBalance[] {
+  const settlementCurrency = normalizeCurrency(options.settlement_currency);
+  const map = new Map<UUID, number>();
+  const bump = (uid: UUID, delta: number) => {
+    map.set(uid, (map.get(uid) ?? 0) + delta);
+  };
+
+  for (const exp of expenses) {
+    const sourceCurrency = normalizeCurrency(exp.currency);
+    const rate = sourceCurrency === settlementCurrency
+      ? 1
+      : options.rates[sourceCurrency];
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error(`missing FX rate ${sourceCurrency}->${settlementCurrency}`);
+    }
+
+    const sourceShareTotal = exp.shares.reduce((sum, s) => sum + s.share_cents, 0);
+    if (sourceShareTotal !== exp.amount_cents) {
+      throw new Error(
+        `expense ${exp.id} shares sum (${sourceShareTotal}) != amount (${exp.amount_cents})`,
+      );
+    }
+
+    const convertedAmount = convertCents(exp.amount_cents, rate);
+    const convertedShares = convertSharesPreservingTotal(exp.shares, rate, convertedAmount);
+
+    bump(exp.payer_id, convertedAmount);
+    for (const s of convertedShares) {
+      bump(s.user_id, -s.share_cents);
+    }
+  }
+
   return Array.from(map.entries()).map(([user_id, balance_cents]) => ({
     user_id,
     balance_cents,
@@ -71,4 +119,49 @@ export function minimumTransfers(balances: UserBalance[]): SettlementTransfer[] 
     if (d.balance_cents === 0) j++;
   }
   return out;
+}
+
+export function convertCents(cents: number, rate: number): number {
+  if (!Number.isInteger(cents) || cents < 0) {
+    throw new Error(`cents must be a non-negative integer (got ${cents})`);
+  }
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error(`rate must be a positive number (got ${rate})`);
+  }
+  return Math.round(cents * rate);
+}
+
+function convertSharesPreservingTotal(
+  shares: ExpenseWithShares['shares'],
+  rate: number,
+  convertedTotal: number,
+): ExpenseWithShares['shares'] {
+  const fractions: { idx: number; frac: number }[] = [];
+  const out = shares.map((s, idx) => {
+    const exact = s.share_cents * rate;
+    const floor = Math.floor(exact);
+    fractions.push({ idx, frac: exact - floor });
+    return { ...s, share_cents: floor };
+  });
+
+  let remainder = convertedTotal - out.reduce((sum, s) => sum + s.share_cents, 0);
+  fractions.sort((a, b) => (b.frac - a.frac) || (a.idx - b.idx));
+
+  let cursor = 0;
+  while (remainder > 0 && fractions.length > 0) {
+    out[fractions[cursor % fractions.length].idx].share_cents += 1;
+    remainder -= 1;
+    cursor += 1;
+  }
+  while (remainder < 0 && fractions.length > 0) {
+    out[fractions[cursor % fractions.length].idx].share_cents -= 1;
+    remainder += 1;
+    cursor += 1;
+  }
+
+  return out;
+}
+
+function normalizeCurrency(currency: string): string {
+  return currency.trim().toUpperCase();
 }

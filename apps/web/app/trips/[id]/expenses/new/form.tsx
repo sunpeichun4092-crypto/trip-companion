@@ -7,11 +7,14 @@ import { toCents, splitExpense } from '@tripmate/shared';
 
 interface Member { user_id: string; name: string }
 
+const CURRENCIES = ['CNY', 'JPY', 'USD', 'EUR', 'HKD', 'KRW', 'THB'];
+
 export function NewExpenseForm({
   tripId, currency, members,
 }: { tripId: string; currency: string; members: Member[] }) {
   const router = useRouter();
   const [amount, setAmount] = useState('');
+  const [expenseCurrency, setExpenseCurrency] = useState(currency);
   const [desc, setDesc] = useState('');
   const [payerId, setPayerId] = useState<string>(members[0]?.user_id ?? '');
   const [mode, setMode] = useState<'equal' | 'weighted'>('equal');
@@ -53,7 +56,7 @@ export function NewExpenseForm({
         trip_id: tripId,
         payer_id: payerId,
         amount_cents: cents,
-        currency,
+        currency: expenseCurrency,
         description: desc.trim() || null,
         split_mode: mode,
       }).select('id').single();
@@ -84,8 +87,13 @@ export function NewExpenseForm({
 
       <form onSubmit={submit} className="card p-5 space-y-4">
         <div>
-          <label className="label-sm">金额（元） *</label>
-          <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          <label className="label-sm">金额 *</label>
+          <div className="grid grid-cols-[1fr_104px] gap-2">
+            <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+            <select className="input" value={expenseCurrency} onChange={(e) => setExpenseCurrency(e.target.value)}>
+              {CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
+            </select>
+          </div>
         </div>
         <div>
           <label className="label-sm">说明</label>

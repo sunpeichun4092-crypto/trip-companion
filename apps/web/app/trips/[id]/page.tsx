@@ -28,7 +28,7 @@ export default async function TripDetailPage({ params }: { params: { id: string 
   if (error) throw new Error(error.message);
   if (!data) notFound();
 
-  const trip = data as TripDetail;
+  const trip = data as unknown as TripDetail;
   const daysLeft = trip.start_date
     ? Math.ceil((new Date(trip.start_date).getTime() - Date.now()) / 86400000)
     : null;
