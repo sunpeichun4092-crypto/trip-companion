@@ -42,7 +42,7 @@ export interface TripWithMembers extends Trip {
 
 // ----- Bookkeeping -----
 
-export type SplitMode = 'equal' | 'weighted';
+export type SplitMode = 'equal' | 'weighted' | 'custom';
 
 export interface Expense {
   id: UUID;

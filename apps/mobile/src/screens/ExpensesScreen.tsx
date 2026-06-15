@@ -38,7 +38,10 @@ export default function ExpensesScreen() {
               <Text style={s.amount}>{formatCents(item.amount_cents, item.currency)}</Text>
             </View>
             <Text style={s.meta}>
-              {item.split_mode === 'equal' ? '等额' : '加权'} · {item.shares.length} 人 · {item.spent_at.slice(0, 10)}
+              {splitModeLabel(item.split_mode)} · {item.shares.length} 人参与 AA · {item.spent_at.slice(0, 10)}
+            </Text>
+            <Text style={s.participants} numberOfLines={2}>
+              参与：{item.shares.map((s) => s.user_id.slice(0, 6)).join('、')}
             </Text>
           </View>
         )}
@@ -58,6 +61,13 @@ const s = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600', flex: 1 },
   amount: { fontSize: 16, fontWeight: '700', color: colors.warn },
   meta: { color: colors.muted, fontSize: 12, marginTop: 4 },
+  participants: { color: colors.muted, fontSize: 12, marginTop: 4 },
   empty: { textAlign: 'center', color: colors.muted, marginTop: spacing.xxl },
   footer: { flexDirection: 'row', gap: spacing.s, padding: spacing.l, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
 });
+
+function splitModeLabel(mode: string) {
+  return mode === 'weighted' ? '加权'
+    : mode === 'custom' ? '自定义金额'
+    : '等额';
+}

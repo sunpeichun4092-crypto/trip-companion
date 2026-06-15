@@ -154,7 +154,7 @@
         <button class="btn btn-outline" id="add-expense-btn">+ 加一笔</button>
       </div>
       <table id="expenses-table">
-        <thead><tr><th>日期</th><th>项目</th><th>谁付的</th><th style="text-align:right">原币种金额</th><th style="text-align:right">结算折算</th><th>分账方式</th></tr></thead>
+        <thead><tr><th>日期</th><th>项目</th><th>谁付的</th><th>哪些人 A</th><th style="text-align:right">原币种金额</th><th style="text-align:right">结算折算</th><th>分账方式</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="divider"></div>
@@ -221,12 +221,13 @@ let EXPENSES = [
   {id:'e10',date:'04-07', title:'奈良鹿饼 + 巴士',           payer:'u4', cents:580000, currency:'JPY', mode:'equal',    participants:allIds},
   {id:'e11',date:'04-08', title:'海外预订手续费',             payer:'u4', cents:1880,   currency:'USD', mode:'weighted', weights:{u1:1,u2:1,u3:2,u4:1,u5:1}},
   {id:'e12',date:'04-09', title:'回程机场快线',              payer:'u5', cents:980000, currency:'JPY', mode:'equal',    participants:allIds},
+  {id:'e13',date:'04-09', title:'药妆店代买（不是所有人 A）',  payer:'u2', cents:1860000,currency:'JPY', mode:'custom', shares:{u1:600000,u3:820000,u5:440000}},
 ];
 
 const SETTLEMENT_CURRENCY = 'CNY';
-const FX = {
+let FX = {
   date: '2026-06-15',
-  source: 'demo 固定汇率',
+  source: '兜底汇率',
   rates: { CNY:1, JPY:0.04221, USD:7.18 },
 };
 
@@ -278,6 +279,9 @@ function splitWeighted(cents, weights){
   return out;
 }
 function splitExpense(mode, cents, expense){
+  if (mode === 'custom') {
+    return Object.entries(expense.shares).map(([id, share]) => ({user_id:id, cents:share}));
+  }
   if (mode === 'weighted') return splitWeighted(cents, expense.weights);
   return splitEqual(cents, expense.participants);
 }
@@ -338,6 +342,37 @@ function minimumTransfers(balance){
 function formatCents(c, currency='CNY'){
   const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '¥';
   return symbol + (c/100).toFixed(2);
+}
+async function refreshFxRates(){
+  const currencies = [...new Set(EXPENSES.map(e=>e.currency).filter(c=>c && c !== SETTLEMENT_CURRENCY))];
+  const rates = { [SETTLEMENT_CURRENCY]: 1 };
+  let date = new Date().toISOString().slice(0,10);
+  let source = 'Open ER API 自动汇率';
+  try {
+    const res = await fetch(`https://open.er-api.com/v6/latest/${SETTLEMENT_CURRENCY}`);
+    if(!res.ok) throw new Error('rate fetch failed');
+    const json = await res.json();
+    if(!json.rates) throw new Error('missing rates');
+    for(const currency of currencies){
+      if(!json.rates[currency]) throw new Error(`missing ${currency}`);
+      rates[currency] = 1 / json.rates[currency];
+    }
+    date = (json.time_last_update_utc || date).slice(0, 16);
+    FX = { date, source, rates };
+  } catch (err) {
+    FX = { ...FX, date, source:'兜底汇率（自动汇率获取失败）' };
+  }
+  renderExpenses();
+}
+function splitModeLabel(mode){
+  return mode === 'weighted' ? '加权' : mode === 'custom' ? '自定义金额' : '等额';
+}
+function participantsText(e){
+  const shares = splitExpense(e.mode, e.cents, e);
+  if(e.mode === 'custom'){
+    return shares.map(s=>`${memberMap[s.user_id].name} A ${formatCents(s.cents, e.currency)}`).join('、');
+  }
+  return shares.map(s=>memberMap[s.user_id].name).join('、');
 }
 
 /* ============ RENDER ============ */
@@ -470,9 +505,10 @@ function renderExpenses(){
       <td class="muted mono">${e.date}</td>
       <td><strong>${e.title}</strong></td>
       <td><span class="avatar" style="background:${memberMap[e.payer].color};margin-right:6px">${memberMap[e.payer].name[0]}</span>${memberMap[e.payer].name}</td>
+      <td class="muted" style="max-width:220px">${participantsText(e)}</td>
       <td style="text-align:right"><strong>${formatCents(e.cents, e.currency)}</strong> <span class="muted">${e.currency}</span></td>
       <td style="text-align:right">${formatCents(convertedCents(e), SETTLEMENT_CURRENCY)}</td>
-      <td><span class="pill ${e.mode==='weighted'?'warn':'brand'}">${e.mode==='weighted'?'加权':'等额'}</span></td>
+      <td><span class="pill ${e.mode==='weighted'?'warn':e.mode==='custom'?'ok':'brand'}">${splitModeLabel(e.mode)}</span></td>
     </tr>
   `).join('');
 
@@ -480,7 +516,11 @@ function renderExpenses(){
   const balance = settleNet(EXPENSES);
   const transfers = minimumTransfers(balance);
 
-  let html = `<div class="muted" style="margin-bottom:12px">按最终 AA 日 ${FX.date} 汇率统一折算为 ${SETTLEMENT_CURRENCY}：1 JPY = ${FX.rates.JPY} CNY · 1 USD = ${FX.rates.USD} CNY（${FX.source}）</div>`;
+  const rateText = Object.entries(FX.rates)
+    .filter(([code])=>code !== SETTLEMENT_CURRENCY)
+    .map(([code, rate])=>`1 ${code} = ${Number(rate).toFixed(4)} ${SETTLEMENT_CURRENCY}`)
+    .join(' · ');
+  let html = `<div class="muted" style="margin-bottom:12px">按最终 AA 日 ${FX.date} 汇率统一折算为 ${SETTLEMENT_CURRENCY}：${rateText || '无需折算'}（${FX.source}）</div>`;
   html += `<div class="grid grid-2"><div>`;
   html += `<div class="label-sm">每人净额</div>`;
   html += TRIP.members.map(m=>{
@@ -514,13 +554,22 @@ document.addEventListener('click', e=>{
   if(e.target.id !== 'add-expense-btn') return;
   const title = prompt('账目名称（demo）','便利店买水');
   if(!title) return;
-  const yuan = parseFloat(prompt('金额（元）','12.5')) || 0;
-  if(yuan <= 0) return;
+  const currency = (prompt('币种（CNY / JPY / USD）','JPY') || 'CNY').trim().toUpperCase();
+  if(!['CNY','JPY','USD'].includes(currency)) return alert('demo 暂支持 CNY / JPY / USD');
+  const amount = parseFloat(prompt(`金额（${currency} 原币种）`, currency === 'JPY' ? '1250' : '12.5')) || 0;
+  if(amount <= 0) return;
+  const participants = prompt('哪些人参与 AA？输入成员名，用逗号分隔（阿陈,小王,Lily,Jay,阿琴）','阿陈,小王,Lily,Jay,阿琴');
+  if(!participants) return;
+  const ids = participants.split(/[,，]/).map(x=>x.trim()).filter(Boolean)
+    .map(name=>TRIP.members.find(m=>m.name===name)?.id)
+    .filter(Boolean);
+  if(ids.length === 0) return alert('没有识别到参与 AA 的成员');
   EXPENSES.push({
     id:'e'+Date.now(), date:new Date().toISOString().slice(5,10),
-    title, payer:'u1', cents:Math.round(yuan*100), currency:'CNY', mode:'equal', participants:allIds,
+    title, payer:'u1', cents:Math.round(amount*100), currency, mode:'equal', participants:ids,
   });
   renderExpenses();
+  refreshFxRates();
 });
 
 /* --- Album --- */
@@ -635,6 +684,7 @@ document.querySelectorAll('#tabs button').forEach(b=>{
 renderHeader();
 renderMembers();
 renderExpenses();
+refreshFxRates();
 renderAlbum();
 renderTravelogues();
 renderWizard();

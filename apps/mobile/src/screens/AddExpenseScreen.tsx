@@ -22,9 +22,10 @@ export default function AddExpenseScreen() {
   const [payerId, setPayerId] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [desc, setDesc] = useState('');
-  const [mode, setMode] = useState<'equal' | 'weighted'>('equal');
+  const [mode, setMode] = useState<'equal' | 'weighted' | 'custom'>('equal');
   const [included, setIncluded] = useState<Record<string, boolean>>({});
   const [weights, setWeights] = useState<Record<string, string>>({});
+  const [customShares, setCustomShares] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -32,10 +33,13 @@ export default function AddExpenseScreen() {
       setMembers(trip.trip_members ?? []);
       const inc: Record<string, boolean> = {};
       const w: Record<string, string> = {};
+      const custom: Record<string, string> = {};
       for (const m of trip.trip_members ?? []) {
         inc[m.user_id] = true; w[m.user_id] = '1';
+        custom[m.user_id] = '';
       }
       setIncluded(inc); setWeights(w);
+      setCustomShares(custom);
       if (!payerId && trip.trip_members?.[0]) setPayerId(trip.trip_members[0].user_id);
     }).catch((e) => Alert.alert('加载成员失败', e.message));
   }, [tripId]);
@@ -49,14 +53,22 @@ export default function AddExpenseScreen() {
       .map((m) => ({
         user_id: m.user_id,
         weight: mode === 'weighted' ? parseInt(weights[m.user_id] || '1', 10) : undefined,
+        share_cents: mode === 'custom' ? toCents(parseFloat(customShares[m.user_id] || '0')) : undefined,
       }));
     if (participants.length === 0) return Alert.alert('至少选择一位参与者');
+    const amountCents = toCents(amt);
+    if (mode === 'custom') {
+      const customTotal = participants.reduce((sum, p) => sum + (p.share_cents ?? 0), 0);
+      if (customTotal !== amountCents) {
+        return Alert.alert('自定义金额不匹配', `参与者合计需等于账单金额，目前为 ¥${(customTotal / 100).toFixed(2)} / ¥${(amountCents / 100).toFixed(2)}`);
+      }
+    }
 
     setLoading(true);
     try {
       await api.post(`/trips/${tripId}/expenses`, {
         payer_id: payerId,
-        amount_cents: toCents(amt),
+        amount_cents: amountCents,
         description: desc.trim() || undefined,
         split_mode: mode,
         participants,
@@ -95,6 +107,7 @@ export default function AddExpenseScreen() {
       <View style={s.chips}>
         <Chip active={mode === 'equal'}    label="等额" onPress={() => setMode('equal')} />
         <Chip active={mode === 'weighted'} label="加权" onPress={() => setMode('weighted')} />
+        <Chip active={mode === 'custom'} label="自定义金额" onPress={() => setMode('custom')} />
       </View>
 
       <Text style={s.sectionTitle}>参与者</Text>
@@ -113,8 +126,20 @@ export default function AddExpenseScreen() {
               style={s.weightInput}
             />
           )}
+          {mode === 'custom' && included[m.user_id] && (
+            <TextInput
+              keyboardType="decimal-pad"
+              placeholder="TA A 多少"
+              value={customShares[m.user_id]}
+              onChangeText={(v) => setCustomShares({ ...customShares, [m.user_id]: v })}
+              style={s.customInput}
+            />
+          )}
         </View>
       ))}
+      {mode === 'custom' && (
+        <Text style={s.hint}>自定义金额会明确记录哪些人参与 AA，以及每个人具体承担多少。</Text>
+      )}
 
       <Button title="保存账单" onPress={submit} loading={loading} />
     </ScrollView>
@@ -149,4 +174,6 @@ const s = StyleSheet.create({
   checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   memberName: { flex: 1, fontSize: 15, color: colors.text },
   weightInput: { width: 60, borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, textAlign: 'center', backgroundColor: colors.card },
+  customInput: { width: 100, borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, textAlign: 'center', backgroundColor: colors.card },
+  hint: { color: colors.muted, fontSize: 12 },
 });

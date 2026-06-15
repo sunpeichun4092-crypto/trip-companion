@@ -25,7 +25,7 @@ const CreateExpenseBody = z.object({
   description: z.string().max(200).optional(),
   category: z.string().max(40).optional(),
   spent_at: z.string().datetime().optional(),
-  split_mode: z.enum(['equal', 'weighted']),
+  split_mode: z.enum(['equal', 'weighted', 'custom']),
   participants: z.array(Participant).min(1),
 });
 
@@ -36,13 +36,15 @@ expensesRouter.post('/:tripId/expenses', async (req, res) => {
   const tripId = req.params.tripId;
   const body = CreateExpenseBody.parse({ ...req.body, trip_id: tripId });
 
-  // Compute shares (server-side, even if client sent share_cents — we accept
-  // override only when split_mode === 'equal' is false AND every participant
-  // sent a share_cents value AND they sum to amount_cents).
+  // Compute shares server-side. Custom split requires every participant to
+  // send the exact amount they should AA for this expense.
   let shares: { user_id: string; share_cents: number }[];
   const allCustom = body.participants.every((p) => typeof p.share_cents === 'number');
   const customSum = body.participants.reduce((a, p) => a + (p.share_cents ?? 0), 0);
-  if (allCustom && customSum === body.amount_cents) {
+  if (body.split_mode === 'custom') {
+    if (!allCustom || customSum !== body.amount_cents) {
+      throw new HttpError(400, 'custom split shares must sum to amount_cents');
+    }
     shares = body.participants.map((p) => ({
       user_id: p.user_id,
       share_cents: p.share_cents!,

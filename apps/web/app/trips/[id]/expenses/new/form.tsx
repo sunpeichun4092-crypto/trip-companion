@@ -17,12 +17,15 @@ export function NewExpenseForm({
   const [expenseCurrency, setExpenseCurrency] = useState(currency);
   const [desc, setDesc] = useState('');
   const [payerId, setPayerId] = useState<string>(members[0]?.user_id ?? '');
-  const [mode, setMode] = useState<'equal' | 'weighted'>('equal');
+  const [mode, setMode] = useState<'equal' | 'weighted' | 'custom'>('equal');
   const [included, setIncluded] = useState<Record<string, boolean>>(
     Object.fromEntries(members.map((m) => [m.user_id, true])),
   );
   const [weights, setWeights] = useState<Record<string, string>>(
     Object.fromEntries(members.map((m) => [m.user_id, '1'])),
+  );
+  const [customShares, setCustomShares] = useState<Record<string, string>>(
+    Object.fromEntries(members.map((m) => [m.user_id, ''])),
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -39,15 +42,24 @@ export function NewExpenseForm({
       .map((m) => ({
         user_id: m.user_id,
         weight: mode === 'weighted' ? parseInt(weights[m.user_id] || '1', 10) : 1,
+        share_cents: mode === 'custom' ? toCents(parseFloat(customShares[m.user_id] || '0')) : undefined,
       }));
     if (participants.length === 0) return setErr('至少 1 位参与者');
 
     const cents = toCents(amt);
-    const shares = splitExpense(
-      mode,
-      cents,
-      participants.map((p) => ({ user_id: p.user_id, weight: p.weight })),
-    );
+    const shares = mode === 'custom'
+      ? participants.map((p) => ({ user_id: p.user_id, share_cents: p.share_cents ?? 0 }))
+      : splitExpense(
+          mode,
+          cents,
+          participants.map((p) => ({ user_id: p.user_id, weight: p.weight })),
+        );
+    if (mode === 'custom') {
+      const customTotal = shares.reduce((sum, s) => sum + s.share_cents, 0);
+      if (customTotal !== cents) {
+        return setErr(`自定义分摊合计需等于账单金额，目前为 ${formatShare(customTotal)} / ${formatShare(cents)}`);
+      }
+    }
 
     setBusy(true);
     try {
@@ -118,6 +130,7 @@ export function NewExpenseForm({
           <div className="flex gap-2">
             <span className={`chip ${mode === 'equal' ? 'chip-on' : ''}`} onClick={() => setMode('equal')}>等额</span>
             <span className={`chip ${mode === 'weighted' ? 'chip-on' : ''}`} onClick={() => setMode('weighted')}>加权</span>
+            <span className={`chip ${mode === 'custom' ? 'chip-on' : ''}`} onClick={() => setMode('custom')}>自定义金额</span>
           </div>
         </div>
 
@@ -141,9 +154,23 @@ export function NewExpenseForm({
                     onChange={(e) => setWeights({ ...weights, [m.user_id]: e.target.value })}
                   />
                 )}
+                {mode === 'custom' && included[m.user_id] && (
+                  <input
+                    className="input w-28 text-center"
+                    inputMode="decimal"
+                    placeholder="TA A 多少"
+                    value={customShares[m.user_id] ?? ''}
+                    onChange={(e) => setCustomShares({ ...customShares, [m.user_id]: e.target.value })}
+                  />
+                )}
               </div>
             ))}
           </div>
+          {mode === 'custom' && (
+            <div className="text-xs text-muted mt-2">
+              自定义金额会精确记录每个人参与 AA 的金额，合计必须等于账单总额。
+            </div>
+          )}
         </div>
 
         {err && <div className="text-danger text-sm">{err}</div>}
@@ -151,4 +178,8 @@ export function NewExpenseForm({
       </form>
     </div>
   );
+}
+
+function formatShare(cents: number) {
+  return `¥${(cents / 100).toFixed(2)}`;
 }

@@ -72,10 +72,13 @@ export function splitWeighted(amount_cents: number, participants: SplitParticipa
 }
 
 export function splitExpense(
-  mode: 'equal' | 'weighted',
+  mode: 'equal' | 'weighted' | 'custom',
   amount_cents: number,
   participants: SplitParticipant[],
 ): SplitResult[] {
+  if (mode === 'custom') {
+    throw new Error('custom split requires explicit share_cents per participant');
+  }
   return mode === 'weighted'
     ? splitWeighted(amount_cents, participants)
     : splitEqual(amount_cents, participants);
