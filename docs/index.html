@@ -85,6 +85,15 @@
   .banner{background:linear-gradient(135deg,#eef1ff,#fbf2ff);border:1px solid #ddd6fe;border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
   .banner .ttl{font-weight:700}
   .countdown{font-size:32px;font-weight:800;background:linear-gradient(135deg,var(--brand),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .modal{position:fixed;inset:0;z-index:30;background:rgba(17,24,39,.45);display:none;align-items:center;justify-content:center;padding:18px}
+  .modal.on{display:flex}
+  .dialog{width:min(720px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:16px;border:1px solid var(--line);box-shadow:0 18px 60px rgba(17,24,39,.22);padding:18px}
+  .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .member-picker{display:grid;gap:8px}
+  .member-row{display:grid;grid-template-columns:auto 1fr 110px;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px}
+  .member-row input[type="checkbox"]{width:18px;height:18px}
+  .member-row .input{padding:7px 9px}
+  @media(max-width:640px){.form-grid{grid-template-columns:1fr}.member-row{grid-template-columns:auto 1fr}.member-row .share-input{grid-column:1 / -1}}
 </style>
 </head>
 <body>
@@ -188,6 +197,56 @@
 
 </main>
 
+<div class="modal" id="expense-modal" aria-hidden="true">
+  <div class="dialog">
+    <div class="toolbar">
+      <h2>新增账单</h2>
+      <button class="btn btn-ghost" id="expense-close" type="button">关闭</button>
+    </div>
+    <form id="expense-form" class="stack">
+      <div class="form-grid">
+        <label>
+          <span class="label-sm">账目名称</span>
+          <input class="input" id="expense-title" value="便利店买水" required>
+        </label>
+        <label>
+          <span class="label-sm">付款人</span>
+          <select id="expense-payer"></select>
+        </label>
+        <label>
+          <span class="label-sm">币种</span>
+          <select id="expense-currency">
+            <option value="JPY">JPY 日元</option>
+            <option value="CNY">CNY 人民币</option>
+            <option value="USD">USD 美元</option>
+          </select>
+        </label>
+        <label>
+          <span class="label-sm">原币种金额</span>
+          <input class="input" id="expense-amount" inputmode="decimal" value="1250" required>
+        </label>
+      </div>
+      <div>
+        <div class="label-sm">分账方式</div>
+        <div class="row" id="expense-mode">
+          <button class="chip on" type="button" data-mode="equal">等额</button>
+          <button class="chip" type="button" data-mode="weighted">加权</button>
+          <button class="chip" type="button" data-mode="custom">自定义金额</button>
+        </div>
+      </div>
+      <div>
+        <div class="label-sm">哪些人参与 AA</div>
+        <div class="member-picker" id="expense-members"></div>
+        <div class="muted" id="expense-hint" style="font-size:12px;margin-top:8px">勾选参与这笔账的人；自定义金额时填写每个人具体 A 多少。</div>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn btn-outline" id="expense-cancel" type="button">取消</button>
+        <button class="btn btn-primary" type="submit">保存账单</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <footer>TripMate Demo · 这是纯前端 mock，没有真后端 / 数据库 / GPT 调用 — 用来感受交互流程</footer>
 
 <script>
@@ -230,6 +289,7 @@ let FX = {
   source: '兜底汇率',
   rates: { CNY:1, JPY:0.04221, USD:7.18 },
 };
+let expenseFormMode = 'equal';
 
 const PHOTOS = [
   {id:'p1', date:'04-03', emoji:'🌸', likes:4},
@@ -552,22 +612,107 @@ function renderExpenses(){
 
 document.addEventListener('click', e=>{
   if(e.target.id !== 'add-expense-btn') return;
-  const title = prompt('账目名称（demo）','便利店买水');
-  if(!title) return;
-  const currency = (prompt('币种（CNY / JPY / USD）','JPY') || 'CNY').trim().toUpperCase();
-  if(!['CNY','JPY','USD'].includes(currency)) return alert('demo 暂支持 CNY / JPY / USD');
-  const amount = parseFloat(prompt(`金额（${currency} 原币种）`, currency === 'JPY' ? '1250' : '12.5')) || 0;
-  if(amount <= 0) return;
-  const participants = prompt('哪些人参与 AA？输入成员名，用逗号分隔（阿陈,小王,Lily,Jay,阿琴）','阿陈,小王,Lily,Jay,阿琴');
-  if(!participants) return;
-  const ids = participants.split(/[,，]/).map(x=>x.trim()).filter(Boolean)
-    .map(name=>TRIP.members.find(m=>m.name===name)?.id)
-    .filter(Boolean);
-  if(ids.length === 0) return alert('没有识别到参与 AA 的成员');
-  EXPENSES.push({
-    id:'e'+Date.now(), date:new Date().toISOString().slice(5,10),
-    title, payer:'u1', cents:Math.round(amount*100), currency, mode:'equal', participants:ids,
+  openExpenseModal();
+});
+
+function openExpenseModal(){
+  document.getElementById('expense-modal').classList.add('on');
+  document.getElementById('expense-modal').setAttribute('aria-hidden','false');
+  document.getElementById('expense-payer').innerHTML = TRIP.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  document.getElementById('expense-title').value = '便利店买水';
+  document.getElementById('expense-currency').value = 'JPY';
+  document.getElementById('expense-amount').value = '1250';
+  setExpenseMode('equal');
+}
+
+function closeExpenseModal(){
+  document.getElementById('expense-modal').classList.remove('on');
+  document.getElementById('expense-modal').setAttribute('aria-hidden','true');
+}
+
+function setExpenseMode(mode){
+  expenseFormMode = mode;
+  document.querySelectorAll('#expense-mode [data-mode]').forEach(btn=>{
+    btn.classList.toggle('on', btn.dataset.mode === mode);
   });
+  renderExpenseMemberPicker();
+}
+
+function renderExpenseMemberPicker(){
+  const wrap = document.getElementById('expense-members');
+  wrap.innerHTML = TRIP.members.map(m=>`
+    <label class="member-row">
+      <input type="checkbox" data-exp-member="${m.id}" checked>
+      <span>${avatar(m)} <strong>${m.name}</strong></span>
+      ${expenseFormMode === 'weighted'
+        ? `<input class="input share-input" data-exp-weight="${m.id}" inputmode="numeric" value="1" title="权重">`
+        : expenseFormMode === 'custom'
+          ? `<input class="input share-input" data-exp-share="${m.id}" inputmode="decimal" placeholder="TA A 多少">`
+          : `<span class="muted share-input">参与</span>`}
+    </label>
+  `).join('');
+}
+
+document.getElementById('expense-mode').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-mode]');
+  if(!btn) return;
+  setExpenseMode(btn.dataset.mode);
+});
+
+document.getElementById('expense-currency').addEventListener('change', e=>{
+  const defaults = { JPY:'1250', CNY:'12.5', USD:'12.5' };
+  document.getElementById('expense-amount').value = defaults[e.target.value] || '12.5';
+});
+
+document.getElementById('expense-close').onclick = closeExpenseModal;
+document.getElementById('expense-cancel').onclick = closeExpenseModal;
+document.getElementById('expense-modal').addEventListener('click', e=>{
+  if(e.target.id === 'expense-modal') closeExpenseModal();
+});
+
+document.getElementById('expense-form').addEventListener('submit', e=>{
+  e.preventDefault();
+  const title = document.getElementById('expense-title').value.trim();
+  const payer = document.getElementById('expense-payer').value;
+  const currency = document.getElementById('expense-currency').value;
+  const amount = parseFloat(document.getElementById('expense-amount').value);
+  if(!title || !payer || !Number.isFinite(amount) || amount <= 0) return alert('请填写有效账目信息');
+
+  const cents = Math.round(amount * 100);
+  const checked = [...document.querySelectorAll('[data-exp-member]:checked')].map(el=>el.dataset.expMember);
+  if(checked.length === 0) return alert('至少选择一位参与 AA 的成员');
+
+  let expense = {
+    id:'e'+Date.now(), date:new Date().toISOString().slice(5,10),
+    title, payer, cents, currency, mode:expenseFormMode,
+  };
+
+  if(expenseFormMode === 'equal'){
+    expense.participants = checked;
+  } else if(expenseFormMode === 'weighted'){
+    const weights = {};
+    for(const id of checked){
+      const raw = document.querySelector(`[data-exp-weight="${id}"]`)?.value || '1';
+      const weight = Math.max(1, parseInt(raw, 10) || 1);
+      weights[id] = weight;
+    }
+    expense.weights = weights;
+  } else {
+    const shares = {};
+    let total = 0;
+    for(const id of checked){
+      const raw = document.querySelector(`[data-exp-share="${id}"]`)?.value || '0';
+      const share = Math.round((parseFloat(raw) || 0) * 100);
+      if(share <= 0) return alert('自定义金额里，每个参与者都需要填写大于 0 的金额');
+      shares[id] = share;
+      total += share;
+    }
+    if(total !== cents) return alert(`自定义金额合计需要等于账单金额，目前为 ${formatCents(total, currency)} / ${formatCents(cents, currency)}`);
+    expense.shares = shares;
+  }
+
+  EXPENSES.push(expense);
+  closeExpenseModal();
   renderExpenses();
   refreshFxRates();
 });
