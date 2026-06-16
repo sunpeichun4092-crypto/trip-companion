@@ -4,6 +4,7 @@
 
 这个包是 TripMate · 旅程伴侣的完整项目封装，包含：
 
+- `docs/assets/cover.png`：项目封面图，可用于 README、演示材料和社交分享预览。
 - `docs/index.html`：可直接打开的离线 Demo，适合演示核心流程。
 - `apps/web/`：Next.js Web App。
 - `apps/mobile/`：Expo / React Native App。

@@ -1,5 +1,7 @@
 # TripMate · 旅程伴侣
 
+![TripMate cover](docs/assets/cover.png)
+
 3-8 人小团体出游伴侣：行前一起规划 · 行中省心管账 · 行后留下回忆。
 
 > 🌐 **在线 Demo**：[https://sunpeichun4092-crypto.github.io/trip-companion/](https://sunpeichun4092-crypto.github.io/trip-companion/) — 离线 mock，5 模块都能交互（推到 GitHub 后会自动部署）
