@@ -95,6 +95,11 @@
   .member-row{display:grid;grid-template-columns:auto 1fr 110px;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px}
   .member-row input[type="checkbox"]{width:18px;height:18px}
   .member-row .input{padding:7px 9px}
+  .auth-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .auth-strip strong{display:block}
+  .auth-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .code-box{font-size:34px;font-weight:900;letter-spacing:.12em;color:var(--teal);text-align:center;padding:18px;border:1px dashed #a7f3d0;border-radius:14px;background:#f0fdfa}
+  .join-preview{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fbfbff}
   .product-hero{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.72);border-radius:22px;box-shadow:var(--deep-shadow);background:
     radial-gradient(circle at 78% 18%, rgba(255,111,79,.2), transparent 28%),
     radial-gradient(circle at 92% 74%, rgba(15,159,150,.16), transparent 30%),
@@ -143,7 +148,7 @@
     .app-shell{grid-template-columns:1fr}
     .side-rail{position:static;display:none}
   }
-  @media(max-width:640px){.form-grid{grid-template-columns:1fr}.member-row{grid-template-columns:auto 1fr}.member-row .share-input{grid-column:1 / -1}}
+  @media(max-width:640px){.form-grid{grid-template-columns:1fr}.member-row{grid-template-columns:auto 1fr}.member-row .share-input{grid-column:1 / -1}.auth-strip{align-items:flex-start;flex-direction:column}.auth-actions .btn{flex:1;min-width:136px}}
 </style>
 </head>
 <body>
@@ -173,6 +178,8 @@
         <div class="hero-actions">
           <button class="btn btn-primary" onclick="go('expenses')">体验记账</button>
           <button class="btn btn-outline" onclick="go('discover')">发现目的地</button>
+          <button class="btn btn-outline" id="hero-register" type="button">注册 / 登录</button>
+          <button class="btn btn-outline" id="hero-join" type="button">输入分享码</button>
         </div>
         <div class="feature-row">
           <div class="feature-mini"><div class="ico">👥</div><strong>邀请组团</strong><span>分享码一键进团</span></div>
@@ -204,7 +211,7 @@
           <div class="phone-screen">
             <div class="invite-card">
               <div class="label-sm">邀请码</div>
-              <div class="code">7K3M9P</div>
+              <div class="code" id="phone-invite-code">7K3M9P</div>
               <button class="btn btn-outline" style="width:100%;font-size:12px">复制邀请链接</button>
             </div>
             <div class="mini-members">
@@ -231,12 +238,26 @@
   </section>
 
   <!-- BANNER -->
+  <div class="auth-strip">
+    <div>
+      <strong id="current-user-label">游客模式</strong>
+      <span class="muted" id="current-user-sub">注册昵称后，可以创建组团或用分享码加入。</span>
+    </div>
+    <div class="auth-actions">
+      <button class="btn btn-outline" id="register-btn" type="button">注册昵称</button>
+      <button class="btn btn-primary" id="create-trip-btn" type="button">创建组团</button>
+      <button class="btn btn-outline" id="join-trip-btn" type="button">输入分享码加入</button>
+    </div>
+  </div>
   <div class="banner">
     <div>
-      <div class="ttl">京都樱花季小团 · 邀请码 <span class="mono badge">7K3M9P</span></div>
+      <div class="ttl"><span id="trip-title-label">京都樱花季小团</span> · 邀请码 <span class="mono badge" id="invite-code-label">7K3M9P</span></div>
       <div class="muted" id="banner-sub">5 位成员 · 距离出发还有 <span class="countdown" id="cd">--</span> 天</div>
     </div>
-    <div class="avatars" id="avatars"></div>
+    <div class="row">
+      <div class="avatars" id="avatars"></div>
+      <button class="btn btn-outline" id="copy-invite-btn" type="button">复制分享码</button>
+    </div>
   </div>
 
   <div class="app-shell">
@@ -287,7 +308,7 @@
         <button class="btn btn-outline" id="add-expense-btn">+ 加一笔</button>
       </div>
       <table id="expenses-table">
-        <thead><tr><th>日期</th><th>项目</th><th>谁付的</th><th>哪些人 A</th><th style="text-align:right">原币种金额</th><th style="text-align:right">结算折算</th><th>分账方式</th></tr></thead>
+        <thead><tr><th>日期</th><th>项目</th><th>谁付的</th><th>哪些人 A</th><th style="text-align:right">原币种金额</th><th style="text-align:right">结算折算</th><th>分账方式</th><th>操作</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="divider"></div>
@@ -326,7 +347,7 @@
 <div class="modal" id="expense-modal" aria-hidden="true">
   <div class="dialog">
     <div class="toolbar">
-      <h2>新增账单</h2>
+      <h2 id="expense-modal-title">新增账单</h2>
       <button class="btn btn-ghost" id="expense-close" type="button">关闭</button>
     </div>
     <form id="expense-form" class="stack">
@@ -373,11 +394,21 @@
   </div>
 </div>
 
+<div class="modal" id="auth-modal" aria-hidden="true">
+  <div class="dialog">
+    <div class="toolbar">
+      <h2 id="auth-modal-title">注册昵称</h2>
+      <button class="btn btn-ghost" id="auth-close" type="button">关闭</button>
+    </div>
+    <div id="auth-modal-body"></div>
+  </div>
+</div>
+
 <footer>TripMate Demo · 这是纯前端 mock，没有真后端 / 数据库 / GPT 调用 — 用来感受交互流程</footer>
 
 <script>
 /* ============ MOCK DATA ============ */
-const TRIP = {
+let TRIP = {
   name:'京都樱花季小团',
   start:'2026-04-02', end:'2026-04-09',
   invite:'7K3M9P',
@@ -389,8 +420,14 @@ const TRIP = {
     {id:'u5', name:'阿琴', color:'#f59e0b', email:'qin@example.com'},
   ],
 };
-const memberMap = Object.fromEntries(TRIP.members.map(m=>[m.id,m]));
-const allIds = TRIP.members.map(m=>m.id);
+let memberMap = Object.fromEntries(TRIP.members.map(m=>[m.id,m]));
+let allIds = TRIP.members.map(m=>m.id);
+let currentUser = null;
+
+function syncMembers(){
+  memberMap = Object.fromEntries(TRIP.members.map(m=>[m.id,m]));
+  allIds = TRIP.members.map(m=>m.id);
+}
 
 let EXPENSES = [
   // amount in minor units * 100 to mirror the real impl
@@ -416,6 +453,8 @@ let FX = {
   rates: { CNY:1, JPY:0.04221, USD:7.18 },
 };
 let expenseFormMode = 'equal';
+let editingExpenseId = null;
+let expensePickerPreset = null;
 
 const PHOTOS = [
   {id:'p1', date:'04-03', emoji:'🌸', likes:4},
@@ -556,9 +595,9 @@ function splitModeLabel(mode){
 function participantsText(e){
   const shares = splitExpense(e.mode, e.cents, e);
   if(e.mode === 'custom'){
-    return shares.map(s=>`${memberMap[s.user_id].name} A ${formatCents(s.cents, e.currency)}`).join('、');
+    return shares.map(s=>`${memberMap[s.user_id]?.name || '未知成员'} A ${formatCents(s.cents, e.currency)}`).join('、');
   }
-  return shares.map(s=>memberMap[s.user_id].name).join('、');
+  return shares.map(s=>memberMap[s.user_id]?.name || '未知成员').join('、');
 }
 
 /* ============ RENDER ============ */
@@ -567,22 +606,188 @@ function avatar(m){
 }
 
 function renderHeader(){
+  syncMembers();
   // countdown
   const today = new Date();
   const start = new Date(TRIP.start);
   const days = Math.ceil((start - today) / 86400000);
   document.getElementById('cd').textContent = days > 0 ? days : 0;
 
+  document.getElementById('trip-title-label').textContent = TRIP.name;
+  document.getElementById('invite-code-label').textContent = TRIP.invite;
+  document.getElementById('phone-invite-code').textContent = TRIP.invite;
+  document.getElementById('banner-sub').innerHTML = `${TRIP.members.length} 位成员 · 距离出发还有 <span class="countdown" id="cd">${days > 0 ? days : 0}</span> 天`;
   document.getElementById('avatars').innerHTML = TRIP.members.map(avatar).join('');
+
+  const userLabel = document.getElementById('current-user-label');
+  const userSub = document.getElementById('current-user-sub');
+  if(currentUser){
+    userLabel.textContent = `${currentUser.name} 已登录`;
+    userSub.textContent = `当前旅程：${TRIP.name} · 分享码 ${TRIP.invite}`;
+  } else {
+    userLabel.textContent = '游客模式';
+    userSub.textContent = '注册昵称后，可以创建组团或用分享码加入。';
+  }
 }
 
 function renderMembers(){
+  syncMembers();
   document.getElementById('members-list').innerHTML = TRIP.members.map(m => `
     <div class="between" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <div class="row">${avatar(m)} <strong>${m.name}</strong> <span class="muted">${m.email}</span></div>
       ${m.role === 'owner' ? '<span class="pill brand">Owner</span>' : ''}
     </div>
   `).join('');
+}
+
+/* --- Auth / Invite demo --- */
+function normalizeInvite(code){
+  return String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function generateInviteCode(){
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return Array.from({length:6}, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+}
+
+function ensureMember(user, role){
+  syncMembers();
+  const same = TRIP.members.find(m => m.id === user.id || m.name === user.name);
+  if(same){
+    if(role) same.role = role;
+    currentUser = same;
+    return same;
+  }
+  const member = {...user, role};
+  TRIP.members.push(member);
+  currentUser = member;
+  syncMembers();
+  return member;
+}
+
+function makeDemoUser(name){
+  const safeName = name.trim() || '新成员';
+  const colors = ['#0f9f96','#ef4444','#2563eb','#9333ea','#ea580c','#0891b2'];
+  return {
+    id:'u'+Date.now(),
+    name:safeName,
+    color:colors[Math.floor(Math.random() * colors.length)],
+    email:`${safeName.replace(/\s+/g,'').toLowerCase()}@demo.local`,
+  };
+}
+
+function renderAllCore(){
+  renderHeader();
+  renderMembers();
+  renderExpenses();
+}
+
+function closeAuthModal(){
+  document.getElementById('auth-modal').classList.remove('on');
+  document.getElementById('auth-modal').setAttribute('aria-hidden','true');
+}
+
+function openAuthModal(mode){
+  const modal = document.getElementById('auth-modal');
+  const title = document.getElementById('auth-modal-title');
+  const body = document.getElementById('auth-modal-body');
+  modal.classList.add('on');
+  modal.setAttribute('aria-hidden','false');
+
+  if(mode === 'create'){
+    title.textContent = '创建组团';
+    body.innerHTML = `
+      <form class="stack" id="create-trip-form">
+        <label>
+          <span class="label-sm">你的昵称</span>
+          <input class="input" id="create-user-name" value="${currentUser?.name || ''}" placeholder="比如 小孙" required>
+        </label>
+        <label>
+          <span class="label-sm">团名</span>
+          <input class="input" id="create-trip-name" value="${TRIP.name}" required>
+        </label>
+        <div class="join-preview">
+          <div class="muted">保存后会生成一个新的 6 位分享码，复制给朋友就能加入这个团。</div>
+        </div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn btn-outline" type="button" data-auth-cancel>取消</button>
+          <button class="btn btn-primary" type="submit">生成分享码</button>
+        </div>
+      </form>
+    `;
+    document.getElementById('create-trip-form').onsubmit = e => {
+      e.preventDefault();
+      const user = currentUser || makeDemoUser(document.getElementById('create-user-name').value);
+      user.name = document.getElementById('create-user-name').value.trim() || user.name;
+      user.email = user.email || `${user.name}@demo.local`;
+      TRIP.name = document.getElementById('create-trip-name').value.trim() || TRIP.name;
+      TRIP.invite = generateInviteCode();
+      ensureMember(user, 'owner');
+      closeAuthModal();
+      renderAllCore();
+      alert(`组团已创建，分享码：${TRIP.invite}`);
+    };
+  } else if(mode === 'join'){
+    title.textContent = '输入分享码加入';
+    body.innerHTML = `
+      <form class="stack" id="join-trip-form">
+        <div class="code-box">${TRIP.invite}</div>
+        <div class="muted">上面是当前 demo 团的分享码。你也可以手动输入朋友发来的分享码。</div>
+        <label>
+          <span class="label-sm">分享码</span>
+          <input class="input mono" id="join-code" value="${TRIP.invite}" maxlength="8" required>
+        </label>
+        <label>
+          <span class="label-sm">你的昵称</span>
+          <input class="input" id="join-user-name" value="${currentUser?.name || ''}" placeholder="比如 小孙" required>
+        </label>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn btn-outline" type="button" data-auth-cancel>取消</button>
+          <button class="btn btn-primary" type="submit">加入组团</button>
+        </div>
+      </form>
+    `;
+    document.getElementById('join-trip-form').onsubmit = e => {
+      e.preventDefault();
+      const code = normalizeInvite(document.getElementById('join-code').value);
+      if(code !== TRIP.invite) return alert(`分享码不正确。当前 demo 分享码是 ${TRIP.invite}`);
+      const name = document.getElementById('join-user-name').value.trim();
+      const user = currentUser || makeDemoUser(name);
+      user.name = name || user.name;
+      user.email = user.email || `${user.name}@demo.local`;
+      ensureMember(user);
+      closeAuthModal();
+      renderAllCore();
+      alert(`${currentUser.name} 已加入 ${TRIP.name}`);
+    };
+  } else {
+    title.textContent = '注册昵称';
+    body.innerHTML = `
+      <form class="stack" id="register-form">
+        <label>
+          <span class="label-sm">你的昵称</span>
+          <input class="input" id="register-name" value="${currentUser?.name || ''}" placeholder="比如 小孙" required>
+        </label>
+        <div class="join-preview">
+          <strong>注册后可体验：</strong>
+          <div class="muted">创建组团、生成分享码、用分享码加入别人发来的旅程。</div>
+        </div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn btn-outline" type="button" data-auth-cancel>取消</button>
+          <button class="btn btn-primary" type="submit">保存昵称</button>
+        </div>
+      </form>
+    `;
+    document.getElementById('register-form').onsubmit = e => {
+      e.preventDefault();
+      const user = makeDemoUser(document.getElementById('register-name').value);
+      ensureMember(user);
+      closeAuthModal();
+      renderAllCore();
+    };
+  }
+
+  body.querySelectorAll('[data-auth-cancel]').forEach(btn=>btn.onclick = closeAuthModal);
 }
 
 /* --- Discover Wizard --- */
@@ -695,6 +900,10 @@ function renderExpenses(){
       <td style="text-align:right"><strong>${formatCents(e.cents, e.currency)}</strong> <span class="muted">${e.currency}</span></td>
       <td style="text-align:right">${formatCents(convertedCents(e), SETTLEMENT_CURRENCY)}</td>
       <td><span class="pill ${e.mode==='weighted'?'warn':e.mode==='custom'?'ok':'brand'}">${splitModeLabel(e.mode)}</span></td>
+      <td>
+        <button class="btn btn-ghost" data-edit-expense="${e.id}" type="button">编辑</button>
+        <button class="btn btn-ghost" data-delete-expense="${e.id}" type="button">删除</button>
+      </td>
     </tr>
   `).join('');
 
@@ -741,23 +950,47 @@ document.addEventListener('click', e=>{
   openExpenseModal();
 });
 
-function openExpenseModal(){
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-edit-expense]');
+  if(!btn) return;
+  openExpenseModal(btn.dataset.editExpense);
+});
+
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-delete-expense]');
+  if(!btn) return;
+  const expense = EXPENSES.find(item => item.id === btn.dataset.deleteExpense);
+  if(!expense) return;
+  if(!confirm(`删除「${expense.title}」这笔账？`)) return;
+  EXPENSES = EXPENSES.filter(item => item.id !== expense.id);
+  renderExpenses();
+});
+
+function openExpenseModal(expenseId){
+  editingExpenseId = expenseId || null;
+  expensePickerPreset = editingExpenseId ? EXPENSES.find(e => e.id === editingExpenseId) : null;
+  const preset = expensePickerPreset;
   document.getElementById('expense-modal').classList.add('on');
   document.getElementById('expense-modal').setAttribute('aria-hidden','false');
+  document.getElementById('expense-modal-title').textContent = preset ? '编辑账单' : '新增账单';
   document.getElementById('expense-payer').innerHTML = TRIP.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-  document.getElementById('expense-title').value = '便利店买水';
-  document.getElementById('expense-currency').value = 'JPY';
-  document.getElementById('expense-amount').value = '1250';
-  setExpenseMode('equal');
+  document.getElementById('expense-title').value = preset?.title || '便利店买水';
+  document.getElementById('expense-payer').value = preset?.payer || TRIP.members[0]?.id || '';
+  document.getElementById('expense-currency').value = preset?.currency || 'JPY';
+  document.getElementById('expense-amount').value = preset ? String(preset.cents / 100) : '1250';
+  setExpenseMode(preset?.mode || 'equal', preset);
 }
 
 function closeExpenseModal(){
   document.getElementById('expense-modal').classList.remove('on');
   document.getElementById('expense-modal').setAttribute('aria-hidden','true');
+  editingExpenseId = null;
+  expensePickerPreset = null;
 }
 
-function setExpenseMode(mode){
+function setExpenseMode(mode, preset){
   expenseFormMode = mode;
+  expensePickerPreset = preset || null;
   document.querySelectorAll('#expense-mode [data-mode]').forEach(btn=>{
     btn.classList.toggle('on', btn.dataset.mode === mode);
   });
@@ -766,14 +999,20 @@ function setExpenseMode(mode){
 
 function renderExpenseMemberPicker(){
   const wrap = document.getElementById('expense-members');
+  const preset = expensePickerPreset;
+  const picked = new Set(
+    preset?.mode === 'weighted' ? Object.keys(preset.weights || {}) :
+    preset?.mode === 'custom' ? Object.keys(preset.shares || {}) :
+    preset?.participants || TRIP.members.map(m=>m.id)
+  );
   wrap.innerHTML = TRIP.members.map(m=>`
     <label class="member-row">
-      <input type="checkbox" data-exp-member="${m.id}" checked>
+      <input type="checkbox" data-exp-member="${m.id}" ${picked.has(m.id) ? 'checked' : ''}>
       <span>${avatar(m)} <strong>${m.name}</strong></span>
       ${expenseFormMode === 'weighted'
-        ? `<input class="input share-input" data-exp-weight="${m.id}" inputmode="numeric" value="1" title="权重">`
+        ? `<input class="input share-input" data-exp-weight="${m.id}" inputmode="numeric" value="${preset?.weights?.[m.id] || 1}" title="权重">`
         : expenseFormMode === 'custom'
-          ? `<input class="input share-input" data-exp-share="${m.id}" inputmode="decimal" placeholder="TA A 多少">`
+          ? `<input class="input share-input" data-exp-share="${m.id}" inputmode="decimal" value="${preset?.shares?.[m.id] ? preset.shares[m.id] / 100 : ''}" placeholder="TA A 多少">`
           : `<span class="muted share-input">参与</span>`}
     </label>
   `).join('');
@@ -808,8 +1047,9 @@ document.getElementById('expense-form').addEventListener('submit', e=>{
   const checked = [...document.querySelectorAll('[data-exp-member]:checked')].map(el=>el.dataset.expMember);
   if(checked.length === 0) return alert('至少选择一位参与 AA 的成员');
 
+  const existing = editingExpenseId ? EXPENSES.find(item => item.id === editingExpenseId) : null;
   let expense = {
-    id:'e'+Date.now(), date:new Date().toISOString().slice(5,10),
+    id: existing?.id || 'e'+Date.now(), date: existing?.date || new Date().toISOString().slice(5,10),
     title, payer, cents, currency, mode:expenseFormMode,
   };
 
@@ -837,11 +1077,33 @@ document.getElementById('expense-form').addEventListener('submit', e=>{
     expense.shares = shares;
   }
 
-  EXPENSES.push(expense);
+  if(existing){
+    EXPENSES = EXPENSES.map(item => item.id === existing.id ? expense : item);
+  } else {
+    EXPENSES.push(expense);
+  }
   closeExpenseModal();
   renderExpenses();
   refreshFxRates();
 });
+
+document.getElementById('register-btn').onclick = () => openAuthModal('register');
+document.getElementById('create-trip-btn').onclick = () => openAuthModal('create');
+document.getElementById('join-trip-btn').onclick = () => openAuthModal('join');
+document.getElementById('hero-register').onclick = () => openAuthModal('register');
+document.getElementById('hero-join').onclick = () => openAuthModal('join');
+document.getElementById('auth-close').onclick = closeAuthModal;
+document.getElementById('auth-modal').addEventListener('click', e=>{
+  if(e.target.id === 'auth-modal') closeAuthModal();
+});
+document.getElementById('copy-invite-btn').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(TRIP.invite);
+    alert(`已复制分享码：${TRIP.invite}`);
+  } catch (err) {
+    alert(`当前浏览器不允许直接复制，请手动复制：${TRIP.invite}`);
+  }
+};
 
 /* --- Album --- */
 function renderAlbum(){
